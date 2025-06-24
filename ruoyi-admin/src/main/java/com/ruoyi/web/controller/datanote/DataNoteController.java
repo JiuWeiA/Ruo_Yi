@@ -95,6 +95,10 @@ public class DataNoteController extends BaseController {
             String originalText = (String) params.get("originalText");
             List<Map<String, Object>> annotations = (List<Map<String, Object>>) params.get("annotations");
             
+            // 添加调试信息
+            logger.info("收到保存标注请求: textId={}, originalText={}", textId, originalText);
+            logger.info("原始标注数据: {}", annotations);
+            
             // 数据验证
             if (textId == null || textId.trim().isEmpty()) {
                 return error("文本编号不能为空");
@@ -102,6 +106,32 @@ public class DataNoteController extends BaseController {
             
             if (annotations == null || annotations.isEmpty()) {
                 return error("标注数据不能为空");
+            }
+            
+            // 调试：检查每个标注
+            int index = 0;
+            for (Map<String, Object> ann : annotations) {
+                String text = (String) ann.get("text");
+                Integer start = ((Number) ann.get("start")).intValue();
+                Integer end = ((Number) ann.get("end")).intValue();
+                String type = (String) ann.get("type");
+                Integer level = ((Number) ann.get("level")).intValue();
+                
+                logger.info("标注[{}]: text='{}', start={}, end={}, type={}, level={}", 
+                           index++, text, start, end, type, level);
+                
+                // 检查文本提取是否正确
+                if (start >= 0 && end <= originalText.length() && start < end) {
+                    String actualText = originalText.substring(start, end);
+                    logger.info("原文中对应位置的实际文本: '{}'", actualText);
+                    
+                    if (!actualText.contains(text) && !text.isEmpty()) {
+                        logger.warn("警告: 标注文本与原文中的文本不匹配!");
+                    }
+                } else {
+                    logger.warn("警告: 标注位置超出原文范围! start={}, end={}, textLength={}", 
+                               start, end, originalText.length());
+                }
             }
             
             // 调用服务层保存数据
@@ -381,6 +411,9 @@ public class DataNoteController extends BaseController {
         Pattern pattern = Pattern.compile(patternStr);
         Matcher matcher = pattern.matcher(text);
         
+        // 记录已处理的位置范围，避免重复标注
+        List<Map<String, Object>> processedRanges = new ArrayList<>();
+        
         while (matcher.find()) {
             try {
                 // 找到匹配的文本
@@ -389,6 +422,23 @@ public class DataNoteController extends BaseController {
                 int endPos = matcher.end();
                 
                 logger.info("找到匹配文本: [" + matchedText + "], 位置: " + startPos + "-" + endPos);
+                
+                // 检查是否与已处理的范围重叠
+                boolean isOverlapping = false;
+                for (Map<String, Object> range : processedRanges) {
+                    int rangeStart = (int) range.get("start");
+                    int rangeEnd = (int) range.get("end");
+                    
+                    if (!(endPos <= rangeStart || startPos >= rangeEnd)) {
+                        isOverlapping = true;
+                        logger.info("跳过重叠标注: [" + matchedText + "], 与位置: " + rangeStart + "-" + rangeEnd);
+                        break;
+                    }
+                }
+                
+                if (isOverlapping) {
+                    continue;
+                }
                 
                 // 检查是否已有*标注，如果没有则用*标注
                 int importance = 1; // 默认轻度重要
@@ -472,6 +522,12 @@ public class DataNoteController extends BaseController {
                     entityText = matchedText.replaceAll("\\*", "");
                 }
                 
+                // 检查提取的实体文本是否为空
+                if (entityText == null || entityText.trim().isEmpty()) {
+                    logger.info("跳过空标注");
+                    continue;
+                }
+                
                 logger.info("提取的实体文本: [" + entityText + "], 重要程度: " + importance);
                 
                 // 创建标注对象
@@ -484,70 +540,101 @@ public class DataNoteController extends BaseController {
                 annotation.put("category", entityType);  // 保存原始实体类型为类别
                 
                 annotations.add(annotation);
+                
+                // 记录已处理的范围
+                Map<String, Object> range = new HashMap<>();
+                range.put("start", startPos);
+                range.put("end", endPos);
+                processedRanges.add(range);
             } catch (Exception e) {
                 logger.error("处理匹配文本时出错", e);
                 // 继续处理下一个匹配项
             }
         }
         
-        // 也检查文本中已有的星号标注
+        // 也检查文本中已有的星号标注 - 改进版
         try {
-            Pattern starPattern = Pattern.compile("\\*(.*?)\\*|\\*\\*(.*?)\\*\\*|\\*\\*\\*(.*?)\\*\\*\\*");
-            Matcher starMatcher = starPattern.matcher(text);
+            // 先处理高重要性的标注，然后是中等重要性，最后是低重要性
+            String[] patterns = {
+                "\\*\\*\\*(.*?)\\*\\*\\*", // 高度重要
+                "\\*\\*(.*?)\\*\\*",       // 中度重要
+                "\\*(.*?)\\*"              // 轻度重要
+            };
+            int[] importanceLevels = {3, 2, 1};
+            String[] importanceTypes = {"高度重要", "中度重要", "轻度重要"};
             
-            while (starMatcher.find()) {
-                String fullMatch = starMatcher.group();
-                int startPos = starMatcher.start();
-                int endPos = starMatcher.end();
+            for (int i = 0; i < patterns.length; i++) {
+                Pattern starPattern = Pattern.compile(patterns[i]);
+                Matcher starMatcher = starPattern.matcher(text);
                 
-                // 确定重要程度
-                int importance;
-                String importanceType;
-                String content;
-                
-                if (fullMatch.startsWith("***") && fullMatch.length() >= 6) {
-                    importance = 3;
-                    importanceType = "高度重要";
-                    content = fullMatch.substring(3, fullMatch.length() - 3);
-                } else if (fullMatch.startsWith("**") && fullMatch.length() >= 4) {
-                    importance = 2;
-                    importanceType = "中度重要";
-                    content = fullMatch.substring(2, fullMatch.length() - 2);
-                } else if (fullMatch.startsWith("*") && fullMatch.length() >= 2) {
-                    importance = 1;
-                    importanceType = "轻度重要";
-                    content = fullMatch.substring(1, fullMatch.length() - 1);
-                } else {
-                    // 无效的标注格式，跳过
-                    continue;
-                }
-                
-                logger.info("找到星号标注: [" + content + "], 重要程度: " + importance);
-                
-                // 检查是否重复
-                boolean isDuplicate = false;
-                for (Map<String, Object> existing : annotations) {
-                    if (existing.get("text").equals(content)) {
-                        isDuplicate = true;
-                        break;
+                while (starMatcher.find()) {
+                    String fullMatch = starMatcher.group();
+                    int startPos = starMatcher.start();
+                    int endPos = starMatcher.end();
+                    
+                    // 检查是否与已处理的范围重叠
+                    boolean isOverlapping = false;
+                    for (Map<String, Object> range : processedRanges) {
+                        int rangeStart = (int) range.get("start");
+                        int rangeEnd = (int) range.get("end");
+                        
+                        if (!(endPos <= rangeStart || startPos >= rangeEnd)) {
+                            isOverlapping = true;
+                            logger.info("跳过重叠的星号标注: [" + fullMatch + "], 与位置: " + rangeStart + "-" + rangeEnd);
+                            break;
+                        }
                     }
-                }
-                
-                if (!isDuplicate) {
+                    
+                    if (isOverlapping) {
+                        continue;
+                    }
+                    
+                    // 提取内容
+                    String content;
+                    if (i == 0) { // 高度重要
+                        content = fullMatch.substring(3, fullMatch.length() - 3);
+                    } else if (i == 1) { // 中度重要
+                        content = fullMatch.substring(2, fullMatch.length() - 2);
+                    } else { // 轻度重要
+                        content = fullMatch.substring(1, fullMatch.length() - 1);
+                    }
+                    
+                    // 检查内容是否为空
+                    if (content == null || content.trim().isEmpty()) {
+                        logger.info("跳过空的星号标注: [" + fullMatch + "]");
+                        continue;
+                    }
+                    
+                    logger.info("找到星号标注: [" + content + "], 重要程度: " + importanceLevels[i]);
+                    
+                    // 创建标注
                     Map<String, Object> annotation = new HashMap<>();
                     annotation.put("text", content);
                     annotation.put("start", startPos);
                     annotation.put("end", endPos);
-                    annotation.put("type", importanceType);  // 使用重要程度作为实体类型
-                    annotation.put("level", importance);
-                    annotation.put("category", entityType);  // 保存原始实体类型为类别
+                    annotation.put("type", importanceTypes[i]);
+                    annotation.put("level", importanceLevels[i]);
+                    annotation.put("category", entityType);
                     
                     annotations.add(annotation);
+                    
+                    // 记录已处理的范围
+                    Map<String, Object> range = new HashMap<>();
+                    range.put("start", startPos);
+                    range.put("end", endPos);
+                    processedRanges.add(range);
                 }
             }
         } catch (Exception e) {
             logger.error("处理星号标注时出错", e);
         }
+        
+        // 按位置排序
+        annotations.sort((a, b) -> {
+            int startA = (int) a.get("start");
+            int startB = (int) b.get("start");
+            return Integer.compare(startA, startB);
+        });
         
         logger.info("总共找到 " + annotations.size() + " 个标注");
         return annotations;

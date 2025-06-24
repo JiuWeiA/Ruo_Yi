@@ -218,37 +218,81 @@
                 return level + p1 + level;
             });
             
-            // 提取标注内容
+            // 调试信息
+            console.log("原始文本:", originalText);
+            
+            // 提取标注内容 - 改进版
             var annotations = [];
+            
+            // 先处理高重要性的标注，然后是中等重要性，最后是低重要性
+            // 这样可以避免嵌套标注的问题
             var regexPatterns = [
-                { pattern: /\*(.*?)\*/g, level: 1, type: '轻度重要' },
+                { pattern: /\*\*\*(.*?)\*\*\*/g, level: 3, type: '高度重要' },
                 { pattern: /\*\*(.*?)\*\*/g, level: 2, type: '中度重要' },
-                { pattern: /\*\*\*(.*?)\*\*\*/g, level: 3, type: '高度重要' }
+                { pattern: /\*(.*?)\*/g, level: 1, type: '轻度重要' }
             ];
             
+            // 创建一个临时的工作文本，用于标记已处理过的区域
+            var workingText = originalText;
+            var processedRanges = [];
+            
             regexPatterns.forEach(function(regexObj) {
+                var regex = new RegExp(regexObj.pattern.source, 'g');
                 var match;
-                var tempText = originalText;
-                var offset = 0;
                 
-                while ((match = regexObj.pattern.exec(tempText)) !== null) {
-                    var startPos = match.index + offset;
+                while ((match = regex.exec(workingText)) !== null) {
+                    // 检查匹配的文本是否为空
+                    if (match[1].trim() === '') {
+                        console.log("跳过空标注:", match[0]);
+                        continue;
+                    }
+                    
+                    var startPos = match.index;
                     var endPos = startPos + match[0].length;
                     
-                    annotations.push({
-                        text: match[1],
-                        start: startPos,
-                        end: endPos,
-                        type: regexObj.type,
-                        level: regexObj.level
-                    });
+                    // 检查这个范围是否与已处理的范围重叠
+                    var isOverlapping = false;
+                    for (var i = 0; i < processedRanges.length; i++) {
+                        var range = processedRanges[i];
+                        if (!(endPos <= range.start || startPos >= range.end)) {
+                            isOverlapping = true;
+                            console.log("跳过重叠标注:", match[0], "与", workingText.substring(range.start, range.end));
+                            break;
+                        }
+                    }
+                    
+                    if (!isOverlapping) {
+                        // 添加标注
+                        annotations.push({
+                            text: match[1],
+                            start: startPos,
+                            end: endPos,
+                            type: regexObj.type,
+                            level: regexObj.level
+                        });
+                        
+                        // 记录已处理的范围
+                        processedRanges.push({
+                            start: startPos,
+                            end: endPos
+                        });
+                        
+                        console.log("添加标注:", match[0], "位置:", startPos, "-", endPos);
+                    }
                     
                     // 避免无限循环
-                    if (match.index === regexObj.pattern.lastIndex) {
-                        regexObj.pattern.lastIndex++;
+                    if (match.index === regex.lastIndex) {
+                        regex.lastIndex++;
                     }
                 }
             });
+            
+            // 按位置排序
+            annotations.sort(function(a, b) {
+                return a.start - b.start;
+            });
+            
+            console.log("最终标注列表:", annotations);
             
             // 发送到服务器保存
             var data = {
@@ -256,6 +300,15 @@
                 originalText: originalText,
                 annotations: annotations
             };
+            
+            // 显示调试面板
+            $('#debugPanel').show();
+            $('#debugContent').html(
+                '<strong>原始文本:</strong><br>' + 
+                originalText.replace(/</g, '&lt;').replace(/>/g, '&gt;') + 
+                '<br><br><strong>标注列表:</strong><br>' + 
+                JSON.stringify(annotations, null, 2).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>').replace(/ /g, '&nbsp;')
+            );
             
             $.ajax({
                 url: prefix + "/saveAnnotations",
