@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org" xmlns:shiro="http://www.pollix.at/thymeleaf/shiro">
+<head>
+    <th:block th:include="include :: header('数据标注')" />
+    <th:block th:include="include :: bootstrap-select-css" />
+    <th:block th:include="include :: bootstrap-fileinput-css" />
+    <style>
+        .annotation-area {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-bottom: 20px;
+            min-height: 300px;
+            max-height: 500px;
+            overflow-y: auto;
+            background-color: #f9f9f9;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .importance-1 {
+            background-color: #ffe8a8;
+        }
+        .importance-2 {
+            background-color: #a8e6cf;
+        }
+        .importance-3 {
+            background-color: #ff9aa2;
+        }
+        .annotation-toolbar {
+            margin-bottom: 15px;
+        }
+        .annotation-instructions {
+            margin-bottom: 15px;
+            padding: 10px;
+            background-color: #f0f7ff;
+            border-left: 4px solid #007bff;
+        }
+        .text-id-input {
+            margin-bottom: 15px;
+        }
+        .import-info {
+            margin-top: 15px;
+            color: #666;
+        }
+        .import-panel {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 20px;
+            margin-bottom: 20px;
+            background-color: #f9f9f9;
+        }
+    </style>
+</head>
+<body class="gray-bg">
+    <div class="container-div">
+        <div class="row">
+            <div class="col-sm-12">
+                <div class="tabs-container">
+                    <ul class="nav nav-tabs">
+                        <li class="active"><a data-toggle="tab" href="#tab-1">数据标注</a></li>
+                        <li><a data-toggle="tab" href="#tab-2">数据导入</a></li>
+                    </ul>
+                    <div class="tab-content">
+                        <!-- 数据标注标签页 -->
+                        <div id="tab-1" class="tab-pane active">
+                            <div class="panel-body">
+                                <div class="annotation-instructions">
+                                    <p><strong>标注说明：</strong></p>
+                                    <p>1. 输入文本ID（必填）</p>
+                                    <p>2. 在文本框中输入或粘贴需要标注的文本</p>
+                                    <p>3. 使用星号(*)标注轻度重要内容，双星号(**)标注中度重要内容，三星号(***)标注高度重要内容</p>
+                                    <p>4. 点击保存按钮将标注数据保存到数据库</p>
+                                </div>
+                                
+                                <div class="form-group text-id-input">
+                                    <label class="col-sm-2 control-label">文本ID：</label>
+                                    <div class="col-sm-10">
+                                        <input type="text" id="textId" class="form-control" placeholder="请输入文本ID（必填）">
+                                    </div>
+                                </div>
+                                
+                                <div class="annotation-toolbar">
+                                    <button type="button" class="btn btn-primary" onclick="saveAnnotations()"><i class="fa fa-save"></i> 保存标注</button>
+                                    <button type="button" class="btn btn-default" onclick="clearText()"><i class="fa fa-trash"></i> 清空文本</button>
+                                </div>
+                                
+                                <div contenteditable="true" id="annotationArea" class="annotation-area"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- 数据导入标签页 -->
+                        <div id="tab-2" class="tab-pane">
+                            <div class="panel-body">
+                                <div class="import-panel">
+                                    <h4><i class="fa fa-upload"></i> CSV数据导入</h4>
+                                    <p class="text-muted">请选择需要导入的CSV文件，系统将自动解析并标注"诊断"或"检查结果"列中的内容。</p>
+                                    
+                                    <form id="importForm" enctype="multipart/form-data">
+                                        <div class="form-group">
+                                            <label for="entityType">实体类型：</label>
+                                            <select class="form-control" id="entityType" name="entityType">
+                                                <option value="胸腔积液">胸腔积液</option>
+                                                <option value="气胸">气胸</option>
+                                                <option value="肺部感染">肺部感染</option>
+                                                <option value="其他">其他</option>
+                                            </select>
+                                        </div>
+                                        
+                                        <div class="form-group">
+                                            <input id="csvFile" type="file" name="file" class="file" data-browse-on-zone-click="true" 
+                                                   accept=".csv" multiple>
+                                        </div>
+                                        
+                                        <div class="form-group">
+                                            <button type="button" class="btn btn-primary" onclick="importCSV()">
+                                                <i class="fa fa-upload"></i> 开始导入
+                                            </button>
+                                        </div>
+                                    </form>
+                                    
+                                    <!-- 导入进度和结果显示 -->
+                                    <div id="importProgress" style="display:none;">
+                                        <div class="progress progress-striped active">
+                                            <div id="progressBar" class="progress-bar progress-bar-info" role="progressbar" 
+                                                 aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="width: 0%">
+                                                <span class="sr-only">0% 完成</span>
+                                            </div>
+                                        </div>
+                                        <p id="importStatus" class="text-center">正在处理...</p>
+                                    </div>
+                                    
+                                    <div id="importResult" style="display:none;" class="alert alert-info">
+                                        <h4>导入结果</h4>
+                                        <div id="importResultContent"></div>
+                                    </div>
+                                    
+                                    <!-- 调试信息面板 -->
+                                    <div id="debugPanel" style="display:none;" class="alert alert-warning">
+                                        <h4>
+                                            <i class="fa fa-bug"></i> 调试信息
+                                            <button type="button" class="btn btn-xs btn-default pull-right" onclick="$('#debugContent').toggle()">
+                                                <i class="fa fa-eye"></i> 显示/隐藏详情
+                                            </button>
+                                        </h4>
+                                        <div id="debugContent" style="max-height: 400px; overflow-y: auto; font-family: monospace; white-space: pre-wrap; background-color: #f5f5f5; padding: 10px; margin-top: 10px;"></div>
+                                    </div>
+                                </div>
+                                
+                                <div class="import-info">
+                                    <h4>导入说明：</h4>
+                                    <ol>
+                                        <li>支持导入CSV格式文件（要求有"诊断"或"检查结果"列）</li>
+                                        <li>系统会自动识别并标注CSV文件中的文本</li>
+                                        <li>标注方式：使用星号(*)标记轻度重要内容，双星号(**)中度重要内容，三星号(***)高度重要内容</li>
+                                        <li>导入过程中，请勿刷新或关闭页面</li>
+                                    </ol>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <th:block th:include="include :: footer" />
+    <th:block th:include="include :: bootstrap-select-js" />
+    <th:block th:include="include :: bootstrap-fileinput-js" />
+    <script th:inline="javascript">
+        var prefix = ctx + "datanote/datanote";
+        
+        $(function() {
+            // 初始化文件上传控件
+            $('#csvFile').fileinput({
+                language: 'zh',
+                showUpload: false,
+                showCaption: true,
+                showPreview: false,
+                showRemove: true,
+                allowedFileExtensions: ['csv'],
+                elErrorContainer: '#errorBlock'
+            });
+            
+            // 监听文本变化，实时高亮标注
+            $('#annotationArea').on('input', function() {
+                highlightAnnotations();
+            });
+        });
+        
+        // 高亮显示标注
+        function highlightAnnotations() {
+            var content = $('#annotationArea').html();
+            
+            // 使用正则表达式匹配单星号、双星号、三星号包围的文本
+            content = content.replace(/\*\*\*(.*?)\*\*\*/g, '<span class="importance-3">$1</span>');
+            content = content.replace(/\*\*(.*?)\*\*/g, '<span class="importance-2">$1</span>');
+            content = content.replace(/\*(.*?)\*/g, '<span class="importance-1">$1</span>');
+            
+            $('#annotationArea').html(content);
+        }
+        
+        // 保存标注
+        function saveAnnotations() {
+            var textId = $('#textId').val().trim();
+            var content = $('#annotationArea').html();
+            
+            if (textId === '') {
+                $.modal.alertWarning('请输入文本ID');
+                return;
+            }
+            
+            if (content === '') {
+                $.modal.alertWarning('请输入需要标注的文本内容');
+                return;
+            }
+            
+            // 提取标注数据
+            var originalText = content.replace(/<span class="importance-[123]">(.*?)<\/span>/g, function(match, p1) {
+                var level = match.includes('importance-3') ? '***' : (match.includes('importance-2') ? '**' : '*');
+                return level + p1 + level;
+            });
+            
+            // 提取标注内容
+            var annotations = [];
+            var regexPatterns = [
+                { pattern: /\*(.*?)\*/g, level: 1, type: '轻度重要' },
+                { pattern: /\*\*(.*?)\*\*/g, level: 2, type: '中度重要' },
+                { pattern: /\*\*\*(.*?)\*\*\*/g, level: 3, type: '高度重要' }
+            ];
+            
+            regexPatterns.forEach(function(regexObj) {
+                var match;
+                var tempText = originalText;
+                var offset = 0;
+                
+                while ((match = regexObj.pattern.exec(tempText)) !== null) {
+                    var startPos = match.index + offset;
+                    var endPos = startPos + match[0].length;
+                    
+                    annotations.push({
+                        text: match[1],
+                        start: startPos,
+                        end: endPos,
+                        type: regexObj.type,
+                        level: regexObj.level
+                    });
+                    
+                    // 避免无限循环
+                    if (match.index === regexObj.pattern.lastIndex) {
+                        regexObj.pattern.lastIndex++;
+                    }
+                }
+            });
+            
+            // 发送到服务器保存
+            var data = {
+                textId: textId,
+                originalText: originalText,
+                annotations: annotations
+            };
+            
+            $.ajax({
+                url: prefix + "/saveAnnotations",
+                type: "post",
+                contentType: "application/json",
+                data: JSON.stringify(data),
+                success: function(result) {
+                    if (result.code == 0) {
+                        $.modal.alertSuccess(result.msg || "保存成功");
+                    } else {
+                        $.modal.alertError(result.msg || "保存失败");
+                    }
+                },
+                error: function() {
+                    $.modal.alertError("系统错误，请稍后重试");
+                }
+            });
+        }
+        
+        // 清空文本
+        function clearText() {
+            $('#annotationArea').html('');
+        }
+        
+        // 导入CSV文件
+        function importCSV() {
+            var formData = new FormData();
+            var entityType = $('#entityType').val();
+            var files = $('#csvFile')[0].files;
+            
+            if (files.length === 0) {
+                $.modal.alertWarning('请选择要导入的CSV文件');
+                return;
+            }
+            
+            for (var i = 0; i < files.length; i++) {
+                formData.append('files', files[i]);
+            }
+            formData.append('entityType', entityType);
+            
+            // 显示进度条
+            $('#importProgress').show();
+            $('#importResult').hide();
+            
+            $.ajax({
+                url: prefix + "/importCSV",
+                type: "POST",
+                data: formData,
+                processData: false,
+                contentType: false,
+                beforeSend: function() {
+                    // 显示进度条
+                    $('#progressBar').css('width', '10%');
+                    $('#progressBar').attr('aria-valuenow', 10);
+                    $('#importStatus').text('正在上传文件...');
+                },
+                success: function(result) {
+                    if (result.code == 0) {
+                        $('#progressBar').css('width', '100%');
+                        $('#progressBar').attr('aria-valuenow', 100);
+                        $('#importStatus').text('导入完成');
+                        
+                        $('#importResult').show();
+                        $('#importResultContent').html(
+                            '成功导入：' + result.data.successCount + ' 条记录<br>' +
+                            '跳过：' + result.data.skipCount + ' 条记录<br>' +
+                            '失败：' + result.data.failCount + ' 条记录'
+                        );
+                        
+                        // 显示调试信息
+                        if (result.data.debugInfo) {
+                            $('#debugPanel').show();
+                            $('#debugContent').html(result.data.debugInfo);
+                        }
+                        
+                        // 重置文件输入
+                        $('#csvFile').fileinput('clear');
+                        
+                        $.modal.alertSuccess(result.msg || "导入成功");
+                    } else {
+                        $('#importProgress').hide();
+                        
+                        // 显示调试信息（即使失败也显示）
+                        if (result.data && result.data.debugInfo) {
+                            $('#debugPanel').show();
+                            $('#debugContent').html(result.data.debugInfo);
+                        }
+                        
+                        $.modal.alertError(result.msg || "导入失败");
+                    }
+                },
+                error: function(xhr) {
+                    $('#importProgress').hide();
+                    
+                    // 尝试从错误响应中获取调试信息
+                    try {
+                        var response = JSON.parse(xhr.responseText);
+                        if (response.data && response.data.debugInfo) {
+                            $('#debugPanel').show();
+                            $('#debugContent').html(response.data.debugInfo);
+                        }
+                    } catch (e) {
+                        console.error("解析错误响应失败", e);
+                    }
+                    
+                    $.modal.alertError("系统错误，请稍后重试");
+                }
+            });
+        }
+    </script>
+</body>
+</html> 

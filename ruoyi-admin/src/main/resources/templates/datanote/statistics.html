@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org" xmlns:shiro="http://www.pollix.at/thymeleaf/shiro">
+<head>
+    <th:block th:include="include :: header('数据标注统计')" />
+    <th:block th:include="include :: bootstrap-select-css" />
+    <!-- 引入ECharts -->
+    <th:block th:include="include :: echarts-js" />
+    <style>
+        .chart-container {
+            height: 500px;
+            margin-bottom: 30px;
+            border: 1px solid #eee;
+            padding: 10px;
+        }
+        .statistics-card {
+            background-color: #fff;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            padding: 25px;
+        }
+        .statistics-number {
+            font-size: 3rem;
+            font-weight: bold;
+            margin: 15px 0;
+            color: #36a2eb;
+        }
+        .statistics-title {
+            font-size: 1.2rem;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        .importance-1 {
+            color: #ffe8a8;
+        }
+        .importance-2 {
+            color: #a8e6cf;
+        }
+        .importance-3 {
+            color: #ff9aa2;
+        }
+        .section-header {
+            margin: 30px 0 20px 0;
+            border-left: 4px solid #1890ff;
+            padding-left: 10px;
+            font-size: 1.4rem;
+        }
+        .debug-panel {
+            background-color: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .debug-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #d9534f;
+        }
+        .debug-content {
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .card-header {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            margin-bottom: 15px;
+        }
+        .card-title {
+            margin: 0;
+            font-size: 1.3rem;
+            color: #333;
+        }
+        .echarts {
+            height: 400px;
+        }
+    </style>
+</head>
+<body class="gray-bg">
+     <div class="container-div">
+        <div class="row">
+            <div class="col-sm-12 search-collapse">
+                <form id="formId">
+                    <div class="select-list">
+                        <ul>
+                            <li>
+                                <p>文本ID：</p>
+                                <input type="text" name="textId"/>
+                            </li>
+                            <li>
+                                <p>标注类型：</p>
+                                <select name="entityType">
+                                    <option value="">所有</option>
+                                    <option value="轻度重要">轻度重要</option>
+                                    <option value="中度重要">中度重要</option>
+                                    <option value="高度重要">高度重要</option>
+                                </select>
+                            </li>
+                            <li>
+                                <a class="btn btn-primary btn-rounded btn-sm" onclick="searchStatistics()"><i class="fa fa-search"></i>&nbsp;搜索</a>
+                                <a class="btn btn-warning btn-rounded btn-sm" onclick="resetForm()"><i class="fa fa-refresh"></i>&nbsp;重置</a>
+                            </li>
+                        </ul>
+                    </div>
+                </form>
+            </div>
+            
+            <!-- 调试信息面板 -->
+            <div class="col-sm-12">
+                <div class="debug-panel">
+                    <div class="debug-title">
+                        <i class="fa fa-bug"></i> 调试信息
+                        <button type="button" class="btn btn-xs btn-info pull-right" onclick="toggleDebugInfo()">
+                            <i class="fa fa-eye"></i> 显示/隐藏
+                        </button>
+                    </div>
+                    <div class="debug-content" id="debugInfo" style="display:none;">
+                        <p>调试日志将显示在这里...</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-sm-12">
+                <h3 class="section-header">核心指标</h3>
+            </div>
+            
+            <!-- 统计卡片 -->
+            <div class="col-sm-12">
+                <div class="row">
+                    <div class="col-sm-4">
+                        <div class="statistics-card">
+                            <div class="statistics-title">标注总数</div>
+                            <div class="statistics-number" id="totalCount">0</div>
+                        </div>
+                    </div>
+                    <div class="col-sm-4">
+                        <div class="statistics-card">
+                            <div class="statistics-title">标注文本数</div>
+                            <div class="statistics-number" id="textCount">0</div>
+                        </div>
+                    </div>
+                    <div class="col-sm-4">
+                        <div class="statistics-card">
+                            <div class="statistics-title">平均每文本标注数</div>
+                            <div class="statistics-number" id="avgCount">0</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-sm-12">
+                <h3 class="section-header">数据分析</h3>
+            </div>
+            
+            <!-- 图表区域 -->
+            <div class="col-sm-12">
+                <div class="row">
+                    <div class="col-sm-6">
+                        <div class="statistics-card">
+                            <div class="card-header">
+                                <h4 class="card-title">标注类型分布</h4>
+                            </div>
+                            <div id="typeChart" class="echarts"></div>
+                        </div>
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="statistics-card">
+                            <div class="card-header">
+                                <h4 class="card-title">重要程度分布</h4>
+                            </div>
+                            <div id="importanceChart" class="echarts"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-sm-12">
+                        <div class="statistics-card">
+                            <div class="card-header">
+                                <h4 class="card-title">标注趋势</h4>
+                            </div>
+                            <div id="trendChart" class="echarts"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <th:block th:include="include :: footer" />
+    <th:block th:include="include :: bootstrap-select-js" />
+    <script th:inline="javascript">
+        var prefix = ctx + "datanote/datanote";
+        
+        $(function() {
+            // 检查ECharts是否加载
+            logDebug("检查ECharts是否加载: " + (typeof echarts !== 'undefined' ? "已加载" : "未加载"));
+            
+            // 初始化页面
+            loadStatistics();
+            
+            // 检查图表容器
+            checkChartContainers();
+            
+            // 初始化完成
+            logDebug("页面初始化完成");
+        });
+        
+        // 检查图表容器
+        function checkChartContainers() {
+            logDebug("检查图表容器:");
+            logDebug("- 类型图表容器: " + ($("#typeChart").length > 0 ? "存在" : "不存在"));
+            logDebug("- 重要程度图表容器: " + ($("#importanceChart").length > 0 ? "存在" : "不存在"));
+            logDebug("- 趋势图表容器: " + ($("#trendChart").length > 0 ? "存在" : "不存在"));
+            
+            // 输出容器尺寸
+            logDebug("- 类型图表容器尺寸: 宽=" + $("#typeChart").width() + "px, 高=" + $("#typeChart").height() + "px");
+            logDebug("- 重要程度图表容器尺寸: 宽=" + $("#importanceChart").width() + "px, 高=" + $("#importanceChart").height() + "px");
+            logDebug("- 趋势图表容器尺寸: 宽=" + $("#trendChart").width() + "px, 高=" + $("#trendChart").height() + "px");
+        }
+        
+        // 加载统计数据
+        function loadStatistics() {
+            logDebug("开始加载统计数据...");
+            
+            var params = {};
+            var textId = $("input[name='textId']").val();
+            var entityType = $("select[name='entityType']").val();
+            
+            if (textId) {
+                params.textId = textId;
+            }
+            if (entityType) {
+                params.entityType = entityType;
+            }
+            
+            logDebug("请求参数: " + JSON.stringify(params));
+            
+            $.ajax({
+                url: prefix + "/statistics",
+                type: "get",
+                dataType: "json",
+                data: params,
+                success: function(result) {
+                    logDebug("接收到统计数据响应: " + JSON.stringify(result).substring(0, 200) + "...");
+                    
+                    if (result.code == 0) {
+                        var data = result.data;
+                        updateStatisticsCards(data);
+                        renderTypeChart(data.typeStats);
+                        renderImportanceChart(data.importanceStats);
+                        renderTrendChart(data.trendStats);
+                        logDebug("统计数据加载完成");
+                    } else {
+                        $.modal.alertError(result.msg);
+                        logDebug("加载统计数据失败: " + result.msg);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    $.modal.alertError("获取数据失败");
+                    logDebug("请求错误: " + status + " - " + error);
+                    logDebug("响应文本: " + xhr.responseText);
+                }
+            });
+        }
+        
+        // 更新统计卡片
+        function updateStatisticsCards(data) {
+            logDebug("更新统计卡片数据");
+            $("#totalCount").text(data.totalCount || 0);
+            $("#textCount").text(data.textCount || 0);
+            $("#avgCount").text(data.avgCount || 0);
+        }
+        
+        // 渲染类型分布图
+        function renderTypeChart(typeStats) {
+            logDebug("开始渲染类型分布图: " + JSON.stringify(typeStats));
+            
+            var chartDom = document.getElementById('typeChart');
+            if (!chartDom) {
+                logDebug("错误: 找不到类型图表容器!");
+                return;
+            }
+            
+            try {
+                var myChart = echarts.init(chartDom);
+                logDebug("类型图表初始化成功");
+                
+                var chartData = formatChartData(typeStats);
+                logDebug("格式化后的图表数据: " + JSON.stringify(chartData));
+                
+                var option = {
+                    tooltip: {
+                        trigger: 'item',
+                        formatter: '{a} <br/>{b}: {c} ({d}%)'
+                    },
+                    legend: {
+                        orient: 'vertical',
+                        left: 10,
+                        data: Object.keys(typeStats || {})
+                    },
+                    series: [
+                        {
+                            name: '标注类型',
+                            type: 'pie',
+                            radius: ['50%', '70%'],
+                            avoidLabelOverlap: false,
+                            label: {
+                                show: false,
+                                position: 'center'
+                            },
+                            emphasis: {
+                                label: {
+                                    show: true,
+                                    fontSize: '18',
+                                    fontWeight: 'bold'
+                                }
+                            },
+                            labelLine: {
+                                show: false
+                            },
+                            data: chartData
+                        }
+                    ]
+                };
+                
+                myChart.setOption(option);
+                logDebug("类型图表渲染完成");
+                
+                // 添加图表点击事件
+                myChart.on('click', function(params) {
+                    logDebug('图表点击事件: ' + params.name + ' - ' + params.value);
+                });
+                
+            } catch (e) {
+                logDebug("类型图表渲染错误: " + e.message);
+                console.error(e);
+            }
+        }
+        
+        // 渲染重要程度分布图
+        function renderImportanceChart(importanceStats) {
+            logDebug("开始渲染重要程度分布图: " + JSON.stringify(importanceStats));
+            
+            var chartDom = document.getElementById('importanceChart');
+            if (!chartDom) {
+                logDebug("错误: 找不到重要程度图表容器!");
+                return;
+            }
+            
+            try {
+                var myChart = echarts.init(chartDom);
+                logDebug("重要程度图表初始化成功");
+                
+                var option = {
+                    tooltip: {
+                        trigger: 'item',
+                        formatter: '{a} <br/>{b}: {c} ({d}%)'
+                    },
+                    legend: {
+                        orient: 'vertical',
+                        left: 10,
+                        data: ['轻度重要', '中度重要', '高度重要']
+                    },
+                    series: [
+                        {
+                            name: '重要程度',
+                            type: 'pie',
+                            radius: '50%',
+                            data: [
+                                {value: importanceStats['1'] || 0, name: '轻度重要', itemStyle: {color: '#ffe8a8'}},
+                                {value: importanceStats['2'] || 0, name: '中度重要', itemStyle: {color: '#a8e6cf'}},
+                                {value: importanceStats['3'] || 0, name: '高度重要', itemStyle: {color: '#ff9aa2'}}
+                            ],
+                            emphasis: {
+                                itemStyle: {
+                                    shadowBlur: 10,
+                                    shadowOffsetX: 0,
+                                    shadowColor: 'rgba(0, 0, 0, 0.5)'
+                                }
+                            }
+                        }
+                    ]
+                };
+                
+                myChart.setOption(option);
+                logDebug("重要程度图表渲染完成");
+                
+            } catch (e) {
+                logDebug("重要程度图表渲染错误: " + e.message);
+                console.error(e);
+            }
+        }
+        
+        // 渲染标注趋势图
+        function renderTrendChart(trendStats) {
+            logDebug("开始渲染标注趋势图: " + JSON.stringify(trendStats));
+            
+            var chartDom = document.getElementById('trendChart');
+            if (!chartDom) {
+                logDebug("错误: 找不到趋势图表容器!");
+                return;
+            }
+            
+            try {
+                var myChart = echarts.init(chartDom);
+                logDebug("趋势图表初始化成功");
+                
+                // 准备数据
+                var dates = Object.keys(trendStats || {}).sort();
+                var values = dates.map(function(date) {
+                    return trendStats[date] || 0;
+                });
+                
+                logDebug("趋势图日期: " + JSON.stringify(dates));
+                logDebug("趋势图数据: " + JSON.stringify(values));
+                
+                var option = {
+                    tooltip: {
+                        trigger: 'axis',
+                        axisPointer: {
+                            type: 'shadow'
+                        }
+                    },
+                    grid: {
+                        left: '3%',
+                        right: '4%',
+                        bottom: '3%',
+                        containLabel: true
+                    },
+                    xAxis: {
+                        type: 'category',
+                        data: dates,
+                        axisLabel: {
+                            rotate: 45
+                        }
+                    },
+                    yAxis: {
+                        type: 'value'
+                    },
+                    series: [{
+                        data: values,
+                        type: 'line',
+                        smooth: true,
+                        areaStyle: {}
+                    }]
+                };
+                
+                myChart.setOption(option);
+                logDebug("趋势图表渲染完成");
+                
+            } catch (e) {
+                logDebug("趋势图表渲染错误: " + e.message);
+                console.error(e);
+            }
+        }
+        
+        // 格式化图表数据
+        function formatChartData(dataObj) {
+            if (!dataObj) return [];
+            return Object.keys(dataObj).map(function(key) {
+                return {
+                    name: key,
+                    value: dataObj[key]
+                };
+            });
+        }
+        
+        // 搜索
+        function searchStatistics() {
+            logDebug("执行统计搜索");
+            loadStatistics();
+        }
+        
+        // 重置表单
+        function resetForm() {
+            logDebug("重置搜索表单");
+            $("input[name='textId']").val("");
+            $("select[name='entityType']").val("").selectpicker('refresh');
+            loadStatistics();
+        }
+        
+        // 记录调试信息
+        function logDebug(message) {
+            var now = new Date();
+            var timeStr = now.getHours() + ":" + now.getMinutes() + ":" + now.getSeconds() + "." + now.getMilliseconds();
+            var logMsg = "[" + timeStr + "] " + message;
+            
+            // 添加到调试面板
+            var $debugInfo = $("#debugInfo");
+            $debugInfo.append("<div>" + logMsg + "</div>");
+            
+            // 限制日志条数
+            if ($debugInfo.children().length > 100) {
+                $debugInfo.children().first().remove();
+            }
+            
+            // 滚动到底部
+            $debugInfo.scrollTop($debugInfo[0].scrollHeight);
+            
+            // 同时输出到控制台
+            console.log(logMsg);
+        }
+        
+        // 切换调试信息显示/隐藏
+        function toggleDebugInfo() {
+            var $debugInfo = $("#debugInfo");
+            $debugInfo.toggle();
+        }
+        
+        // 页面调整大小时，重绘图表
+        $(window).resize(function() {
+            logDebug("窗口大小改变，重绘图表");
+            try {
+                // 重新初始化所有图表
+                var typeChart = echarts.getInstanceByDom(document.getElementById('typeChart'));
+                var importanceChart = echarts.getInstanceByDom(document.getElementById('importanceChart'));
+                var trendChart = echarts.getInstanceByDom(document.getElementById('trendChart'));
+                
+                if (typeChart) {
+                    typeChart.resize();
+                }
+                if (importanceChart) {
+                    importanceChart.resize();
+                }
+                if (trendChart) {
+                    trendChart.resize();
+                }
+            } catch (e) {
+                logDebug("图表重绘错误: " + e.message);
+            }
+        });
+    </script>
+</body>
+</html> 
