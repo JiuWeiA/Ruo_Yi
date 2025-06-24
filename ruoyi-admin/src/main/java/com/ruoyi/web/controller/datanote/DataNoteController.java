@@ -592,21 +592,38 @@ public class DataNoteController extends BaseController {
             double avgCount = textCount > 0 ? (double) totalCount / textCount : 0;
             resultMap.put("avgCount", String.format("%.2f", avgCount));
             
-            // 4. 标注类型统计
+            // 4. 标注类型统计（使用实体文本）
+            Map<String, Long> textStats = annotations.stream()
+                    .filter(ann -> ann.getEntityText() != null && !ann.getEntityText().trim().isEmpty())
+                    .collect(Collectors.groupingBy(
+                            SysDatanoteAnnotation::getEntityText,
+                            Collectors.counting()));
+            resultMap.put("textStats", textStats);
+            
+            // 5. 标注类型统计（原始，使用实体类型）
             Map<String, Long> typeStats = annotations.stream()
+                    .filter(ann -> ann.getEntityType() != null && !ann.getEntityType().trim().isEmpty())
                     .collect(Collectors.groupingBy(
                             SysDatanoteAnnotation::getEntityType,
                             Collectors.counting()));
             resultMap.put("typeStats", typeStats);
             
-            // 5. 重要程度统计
+            // 6. 实体类别统计（使用实体类别）
+            Map<String, Long> categoryStats = annotations.stream()
+                    .filter(ann -> ann.getEntityCategory() != null && !ann.getEntityCategory().trim().isEmpty())
+                    .collect(Collectors.groupingBy(
+                            SysDatanoteAnnotation::getEntityCategory,
+                            Collectors.counting()));
+            resultMap.put("categoryStats", categoryStats);
+            
+            // 7. 重要程度统计
             Map<String, Long> importanceStats = annotations.stream()
                     .collect(Collectors.groupingBy(
                             ann -> String.valueOf(ann.getImportance()),
                             Collectors.counting()));
             resultMap.put("importanceStats", importanceStats);
             
-            // 6. 标注趋势（按日期分组）
+            // 8. 标注趋势（按日期分组）
             SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
             Map<String, Long> trendStats = annotations.stream()
                     .collect(Collectors.groupingBy(

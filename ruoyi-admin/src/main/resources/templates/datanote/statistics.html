@@ -163,7 +163,7 @@
                     <div class="col-sm-6">
                         <div class="statistics-card">
                             <div class="card-header">
-                                <h4 class="card-title">标注类型分布</h4>
+                                <h4 class="card-title">标注实体文本分布</h4>
                             </div>
                             <div id="typeChart" class="echarts"></div>
                         </div>
@@ -178,7 +178,15 @@
                     </div>
                 </div>
                 <div class="row">
-                    <div class="col-sm-12">
+                    <div class="col-sm-6">
+                        <div class="statistics-card">
+                            <div class="card-header">
+                                <h4 class="card-title">实体类别分布</h4>
+                            </div>
+                            <div id="categoryChart" class="echarts"></div>
+                        </div>
+                    </div>
+                    <div class="col-sm-6">
                         <div class="statistics-card">
                             <div class="card-header">
                                 <h4 class="card-title">标注趋势</h4>
@@ -250,8 +258,9 @@
                     if (result.code == 0) {
                         var data = result.data;
                         updateStatisticsCards(data);
-                        renderTypeChart(data.typeStats);
+                        renderTypeChart(data.textStats);
                         renderImportanceChart(data.importanceStats);
+                        renderCategoryChart(data.categoryStats);
                         renderTrendChart(data.trendStats);
                         logDebug("统计数据加载完成");
                     } else {
@@ -290,45 +299,124 @@
                 logDebug("类型图表初始化成功");
                 
                 var chartData = formatChartData(typeStats);
+                
+                // 过滤掉值为0的数据
+                chartData = chartData.filter(function(item) {
+                    return item.value > 0;
+                });
+                
                 logDebug("格式化后的图表数据: " + JSON.stringify(chartData));
                 
-                var option = {
-                    tooltip: {
-                        trigger: 'item',
-                        formatter: '{a} <br/>{b}: {c} ({d}%)'
-                    },
-                    legend: {
-                        orient: 'vertical',
-                        left: 10,
-                        data: Object.keys(typeStats || {})
-                    },
-                    series: [
-                        {
-                            name: '标注类型',
-                            type: 'pie',
-                            radius: ['50%', '70%'],
-                            avoidLabelOverlap: false,
-                            label: {
-                                show: false,
-                                position: 'center'
-                            },
-                            emphasis: {
+                // 如果数据量过大，使用条形图而不是饼图
+                var useBarChart = chartData.length > 15;
+                
+                // 对数据排序
+                chartData.sort(function(a, b) {
+                    return b.value - a.value;
+                });
+                
+                // 限制数据量，只显示前15个
+                if (chartData.length > 15) {
+                    chartData = chartData.slice(0, 15);
+                    logDebug("限制图表数据为前15个: " + JSON.stringify(chartData));
+                }
+                
+                var option;
+                
+                if (useBarChart) {
+                    // 条形图配置
+                    option = {
+                        title: {
+                            text: '标注实体文本分布 (Top 15)',
+                            left: 'center'
+                        },
+                        tooltip: {
+                            trigger: 'axis',
+                            axisPointer: {
+                                type: 'shadow'
+                            }
+                        },
+                        grid: {
+                            left: '3%',
+                            right: '4%',
+                            bottom: '15%',
+                            containLabel: true
+                        },
+                        xAxis: {
+                            type: 'category',
+                            data: chartData.map(function(item) { return item.name; }),
+                            axisLabel: {
+                                interval: 0,
+                                rotate: 45,
+                                textStyle: {
+                                    fontSize: 10
+                                }
+                            }
+                        },
+                        yAxis: {
+                            type: 'value'
+                        },
+                        series: [{
+                            name: '标注数量',
+                            type: 'bar',
+                            data: chartData.map(function(item) { return item.value; }),
+                            itemStyle: {
+                                color: function(params) {
+                                    // 生成一个颜色渐变
+                                    var colorList = ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc'];
+                                    return colorList[params.dataIndex % colorList.length];
+                                }
+                            }
+                        }]
+                    };
+                } else {
+                    // 饼图配置
+                    option = {
+                        title: {
+                            text: '标注实体文本分布',
+                            left: 'center'
+                        },
+                        tooltip: {
+                            trigger: 'item',
+                            formatter: '{a} <br/>{b}: {c} ({d}%)'
+                        },
+                        legend: {
+                            type: 'scroll',
+                            orient: 'vertical',
+                            right: 10,
+                            top: 20,
+                            bottom: 20,
+                            data: chartData.map(function(item) { return item.name; })
+                        },
+                        series: [
+                            {
+                                name: '标注实体文本',
+                                type: 'pie',
+                                radius: ['50%', '70%'],
+                                avoidLabelOverlap: false,
                                 label: {
                                     show: true,
-                                    fontSize: '18',
-                                    fontWeight: 'bold'
-                                }
-                            },
-                            labelLine: {
-                                show: false
-                            },
-                            data: chartData
-                        }
-                    ]
-                };
+                                    formatter: '{b}: {c} ({d}%)',
+                                    fontSize: 10
+                                },
+                                emphasis: {
+                                    label: {
+                                        show: true,
+                                        fontSize: '14',
+                                        fontWeight: 'bold'
+                                    }
+                                },
+                                labelLine: {
+                                    show: true
+                                },
+                                data: chartData
+                            }
+                        ]
+                    };
+                }
                 
                 myChart.setOption(option);
-                logDebug("类型图表渲染完成");
+                logDebug("类型图表渲染完成，使用" + (useBarChart ? "条形图" : "饼图"));
                 
                 // 添加图表点击事件
                 myChart.on('click', function(params) {
@@ -391,6 +479,63 @@
                 
             } catch (e) {
                 logDebug("重要程度图表渲染错误: " + e.message);
+                console.error(e);
+            }
+        }
+        
+        // 渲染实体类别分布图
+        function renderCategoryChart(categoryStats) {
+            logDebug("开始渲染实体类别分布图: " + JSON.stringify(categoryStats));
+            
+            var chartDom = document.getElementById('categoryChart');
+            if (!chartDom) {
+                logDebug("错误: 找不到实体类别图表容器!");
+                return;
+            }
+            
+            try {
+                var myChart = echarts.init(chartDom);
+                logDebug("实体类别图表初始化成功");
+                
+                var chartData = formatChartData(categoryStats);
+                logDebug("格式化后的图表数据: " + JSON.stringify(chartData));
+                
+                var option = {
+                    title: {
+                        text: '实体类别分布',
+                        left: 'center'
+                    },
+                    tooltip: {
+                        trigger: 'item',
+                        formatter: '{a} <br/>{b}: {c} ({d}%)'
+                    },
+                    legend: {
+                        orient: 'vertical',
+                        left: 10,
+                        data: chartData.map(function(item) { return item.name; })
+                    },
+                    series: [
+                        {
+                            name: '实体类别',
+                            type: 'pie',
+                            radius: '50%',
+                            data: chartData,
+                            emphasis: {
+                                itemStyle: {
+                                    shadowBlur: 10,
+                                    shadowOffsetX: 0,
+                                    shadowColor: 'rgba(0, 0, 0, 0.5)'
+                                }
+                            }
+                        }
+                    ]
+                };
+                
+                myChart.setOption(option);
+                logDebug("实体类别图表渲染完成");
+                
+            } catch (e) {
+                logDebug("实体类别图表渲染错误: " + e.message);
                 console.error(e);
             }
         }
@@ -461,12 +606,17 @@
         // 格式化图表数据
         function formatChartData(dataObj) {
             if (!dataObj) return [];
-            return Object.keys(dataObj).map(function(key) {
-                return {
-                    name: key,
-                    value: dataObj[key]
-                };
-            });
+            return Object.keys(dataObj)
+                .filter(function(key) {
+                    // 过滤掉空白键
+                    return key && key.trim() !== '';
+                })
+                .map(function(key) {
+                    return {
+                        name: key,
+                        value: dataObj[key]
+                    };
+                });
         }
         
         // 搜索
@@ -518,6 +668,7 @@
                 // 重新初始化所有图表
                 var typeChart = echarts.getInstanceByDom(document.getElementById('typeChart'));
                 var importanceChart = echarts.getInstanceByDom(document.getElementById('importanceChart'));
+                var categoryChart = echarts.getInstanceByDom(document.getElementById('categoryChart'));
                 var trendChart = echarts.getInstanceByDom(document.getElementById('trendChart'));
                 
                 if (typeChart) {
@@ -525,6 +676,9 @@
                 }
                 if (importanceChart) {
                     importanceChart.resize();
+                }
+                if (categoryChart) {
+                    categoryChart.resize();
                 }
                 if (trendChart) {
                     trendChart.resize();
