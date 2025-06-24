@@ -392,10 +392,13 @@ public class DataNoteController extends BaseController {
                 
                 // 检查是否已有*标注，如果没有则用*标注
                 int importance = 1; // 默认轻度重要
+                String importanceType = "轻度重要"; // 默认轻度重要
                 if (matchedText.contains("***")) {
                     importance = 3; // 高度重要
+                    importanceType = "高度重要";
                 } else if (matchedText.contains("**")) {
                     importance = 2; // 中度重要
+                    importanceType = "中度重要";
                 } else {
                     // 没有标注，将匹配到的文本添加*标注
                     // 提取实际的实体文本
@@ -476,8 +479,9 @@ public class DataNoteController extends BaseController {
                 annotation.put("text", entityText);
                 annotation.put("start", startPos);
                 annotation.put("end", endPos);
-                annotation.put("type", entityType);
+                annotation.put("type", importanceType);  // 使用重要程度作为实体类型
                 annotation.put("level", importance);
+                annotation.put("category", entityType);  // 保存原始实体类型为类别
                 
                 annotations.add(annotation);
             } catch (Exception e) {
@@ -498,16 +502,20 @@ public class DataNoteController extends BaseController {
                 
                 // 确定重要程度
                 int importance;
+                String importanceType;
                 String content;
                 
                 if (fullMatch.startsWith("***") && fullMatch.length() >= 6) {
                     importance = 3;
+                    importanceType = "高度重要";
                     content = fullMatch.substring(3, fullMatch.length() - 3);
                 } else if (fullMatch.startsWith("**") && fullMatch.length() >= 4) {
                     importance = 2;
+                    importanceType = "中度重要";
                     content = fullMatch.substring(2, fullMatch.length() - 2);
                 } else if (fullMatch.startsWith("*") && fullMatch.length() >= 2) {
                     importance = 1;
+                    importanceType = "轻度重要";
                     content = fullMatch.substring(1, fullMatch.length() - 1);
                 } else {
                     // 无效的标注格式，跳过
@@ -530,8 +538,9 @@ public class DataNoteController extends BaseController {
                     annotation.put("text", content);
                     annotation.put("start", startPos);
                     annotation.put("end", endPos);
-                    annotation.put("type", entityType);
+                    annotation.put("type", importanceType);  // 使用重要程度作为实体类型
                     annotation.put("level", importance);
+                    annotation.put("category", entityType);  // 保存原始实体类型为类别
                     
                     annotations.add(annotation);
                 }

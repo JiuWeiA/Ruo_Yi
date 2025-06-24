@@ -13,6 +13,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="startPosition"     column="start_position"    />
         <result property="endPosition"       column="end_position"      />
         <result property="importance"        column="importance"        />
+        <result property="entityCategory"    column="entity_category"   />
         <result property="createBy"          column="create_by"         />
         <result property="createTime"        column="create_time"       />
         <result property="updateBy"          column="update_by"         />
@@ -21,7 +22,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </resultMap>
     
     <sql id="selectAnnotationVo">
-        select id, text_id, original_text, entity_type, entity_text, start_position, end_position, importance,
+        select id, text_id, original_text, entity_type, entity_text, start_position, end_position, importance, entity_category,
                create_by, create_time, update_by, update_time, remark
         from sys_datanote_annotations
     </sql>
@@ -33,6 +34,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="entityType != null and entityType != ''"> and entity_type = #{entityType}</if>
             <if test="entityText != null and entityText != ''"> and entity_text like concat('%', #{entityText}, '%')</if>
             <if test="importance != null"> and importance = #{importance}</if>
+            <if test="entityCategory != null and entityCategory != ''"> and entity_category = #{entityCategory}</if>
         </where>
         order by create_time desc
     </select>
@@ -57,6 +59,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             start_position,
             end_position,
             importance,
+            entity_category,
             create_by,
             create_time,
             remark
@@ -68,6 +71,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             #{startPosition},
             #{endPosition},
             #{importance},
+            #{entityCategory},
             #{createBy},
             #{createTime},
             #{remark}
@@ -84,6 +88,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             start_position,
             end_position,
             importance,
+            entity_category,
             create_by,
             create_time,
             remark
@@ -97,6 +102,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 #{item.startPosition},
                 #{item.endPosition},
                 #{item.importance},
+                #{item.entityCategory},
                 #{item.createBy},
                 #{item.createTime},
                 #{item.remark}
@@ -114,6 +120,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="startPosition != null">start_position = #{startPosition},</if>
             <if test="endPosition != null">end_position = #{endPosition},</if>
             <if test="importance != null">importance = #{importance},</if>
+            <if test="entityCategory != null">entity_category = #{entityCategory},</if>
             <if test="updateBy != null and updateBy != ''">update_by = #{updateBy},</if>
             <if test="updateTime != null">update_time = #{updateTime},</if>
             <if test="remark != null">remark = #{remark},</if>

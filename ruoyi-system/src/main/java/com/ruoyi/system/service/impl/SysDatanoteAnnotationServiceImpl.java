@@ -104,6 +104,11 @@ public class SysDatanoteAnnotationServiceImpl implements ISysDatanoteAnnotationS
             Integer level = ((Number) ann.get("level")).intValue();
             annotation.setImportance(level);
             
+            // 处理实体类别（如果有）
+            if (ann.containsKey("category")) {
+                annotation.setEntityCategory((String) ann.get("category"));
+            }
+            
             // 设置创建信息
             annotation.setCreateBy(ShiroUtils.getLoginName());
             annotation.setCreateTime(DateUtils.getNowDate());

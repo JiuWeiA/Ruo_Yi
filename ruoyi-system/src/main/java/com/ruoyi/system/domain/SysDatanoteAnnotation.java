@@ -43,6 +43,10 @@ public class SysDatanoteAnnotation extends BaseEntity {
     /** 重要程度（1-轻度，2-中度，3-高度） */
     @Excel(name = "重要程度", readConverterExp = "1=轻度,2=中度,3=高度")
     private Integer importance;
+    
+    /** 实体类别 */
+    @Excel(name = "实体类别")
+    private String entityCategory;
 
     public Long getId() {
         return id;
@@ -107,11 +111,19 @@ public class SysDatanoteAnnotation extends BaseEntity {
     public void setImportance(Integer importance) {
         this.importance = importance;
     }
+    
+    public String getEntityCategory() {
+        return entityCategory;
+    }
+
+    public void setEntityCategory(String entityCategory) {
+        this.entityCategory = entityCategory;
+    }
 
     @Override
     public String toString() {
         return "SysDatanoteAnnotation [id=" + id + ", textId=" + textId + ", entityType=" + entityType + ", entityText="
                 + entityText + ", startPosition=" + startPosition + ", endPosition=" + endPosition + ", importance="
-                + importance + "]";
+                + importance + ", entityCategory=" + entityCategory + "]";
     }
 } 
